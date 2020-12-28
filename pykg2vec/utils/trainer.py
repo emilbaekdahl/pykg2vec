@@ -15,17 +15,18 @@ from pykg2vec.utils.riemannian_optimizer import RiemannianOptimizer
 from pykg2vec.data.generator import Generator
 from pykg2vec.utils.logger import Logger
 from pykg2vec.common import Monitor, TrainingStrategy
-warnings.filterwarnings('ignore')
+
+warnings.filterwarnings("ignore")
 
 
 class EarlyStopper:
 
-    """ Class used by trainer for handling the early stopping mechanism during the training of KGE algorithms.
+    """Class used by trainer for handling the early stopping mechanism during the training of KGE algorithms.
 
-        Args:
-            patience (int): Number of epochs to wait before early stopping the training on no improvement.
-            No early stopping if it is a negative number (default: {-1}).
-            monitor (Monitor): the type of metric that earlystopper will monitor.
+    Args:
+        patience (int): Number of epochs to wait before early stopping the training on no improvement.
+        No early stopping if it is a negative number (default: {-1}).
+        monitor (Monitor): the type of metric that earlystopper will monitor.
 
     """
 
@@ -42,10 +43,14 @@ class EarlyStopper:
 
     def should_stop(self, curr_metrics):
         should_stop = False
+        is_worse = False
         value, name = self.monitor.value, self.monitor.name
 
         if self.previous_metrics is not None:
-            if self.monitor == Monitor.MEAN_RANK or self.monitor == Monitor.FILTERED_MEAN_RANK:
+            if (
+                self.monitor == Monitor.MEAN_RANK
+                or self.monitor == Monitor.FILTERED_MEAN_RANK
+            ):
                 is_worse = self.previous_metrics[value] < curr_metrics[value]
             else:
                 is_worse = self.previous_metrics[value] > curr_metrics[value]
@@ -53,35 +58,44 @@ class EarlyStopper:
             if self.patience_left > 0 and is_worse:
                 self.patience_left -= 1
                 self._logger.info(
-                    '%s more chances before the trainer stops the training. (prev_%s, curr_%s): (%.4f, %.4f)' %
-                    (self.patience_left, name, name, self.previous_metrics[value], curr_metrics[value]))
+                    "%s more chances before the trainer stops the training. (prev_%s, curr_%s): (%.4f, %.4f)"
+                    % (
+                        self.patience_left,
+                        name,
+                        name,
+                        self.previous_metrics[value],
+                        curr_metrics[value],
+                    )
+                )
 
             elif self.patience_left == 0 and is_worse:
-                self._logger.info('Stop the training.')
+                self._logger.info("Stop the training.")
                 should_stop = True
 
             else:
-                self._logger.info('Reset the patience count to %d' % (self.patience))
+                self._logger.info("Reset the patience count to %d" % (self.patience))
                 self.patience_left = self.patience
 
-        self.previous_metrics = curr_metrics
+        if not is_worse:
+            self.previous_metrics = curr_metrics
 
         return should_stop
 
 
 class Trainer:
-    """ Class for handling the training of the algorithms.
+    """Class for handling the training of the algorithms.
 
-        Args:
-            model (object): KGE model object
+    Args:
+        model (object): KGE model object
 
-        Examples:
-            >>> from pykg2vec.utils.trainer import Trainer
-            >>> from pykg2vec.models.pairwise import TransE
-            >>> trainer = Trainer(TransE())
-            >>> trainer.build_model()
-            >>> trainer.train_model()
+    Examples:
+        >>> from pykg2vec.utils.trainer import Trainer
+        >>> from pykg2vec.models.pairwise import TransE
+        >>> trainer = Trainer(TransE())
+        >>> trainer.build_model()
+        >>> trainer.train_model()
     """
+
     TRAINED_MODEL_FILE_NAME = "model.vec.pt"
     TRAINED_MODEL_CONFIG_NAME = "config.npy"
     _logger = Logger().get_logger(__name__)
@@ -134,10 +148,12 @@ class Trainer:
             self.optimizer = RiemannianOptimizer(
                 self.model.parameters(),
                 lr=self.config.learning_rate,
-                param_names=param_names
+                param_names=param_names,
             )
         else:
-            raise NotImplementedError("No support for %s optimizer" % self.config.optimizer)
+            raise NotImplementedError(
+                "No support for %s optimizer" % self.config.optimizer
+            )
 
         self.config.summary()
 
@@ -149,7 +165,9 @@ class Trainer:
         neg_preds = self.model(neg_h, neg_r, neg_t)
 
         if self.model.model_name.lower() == "rotate":
-            loss = self.model.loss(pos_preds, neg_preds, self.config.neg_rate, self.config.alpha)
+            loss = self.model.loss(
+                pos_preds, neg_preds, self.config.neg_rate, self.config.alpha
+            )
         else:
             loss = self.model.loss(pos_preds, neg_preds, self.config.margin)
         loss += self.model.get_reg(None, None, None)
@@ -161,13 +179,24 @@ class Trainer:
             pred_tails = self.model(h, r, direction="tail")  # (h, r) -> hr_t forward
             pred_heads = self.model(t, r, direction="head")  # (t, r) -> tr_h backward
 
-            if hasattr(self.config, 'label_smoothing'):
-                loss = self.model.loss(pred_heads, pred_tails, tr_h, hr_t, self.config.label_smoothing, self.config.tot_entity)
+            if hasattr(self.config, "label_smoothing"):
+                loss = self.model.loss(
+                    pred_heads,
+                    pred_tails,
+                    tr_h,
+                    hr_t,
+                    self.config.label_smoothing,
+                    self.config.tot_entity,
+                )
             else:
                 loss = self.model.loss(pred_heads, pred_tails, tr_h, hr_t, None, None)
         else:
-            pred_tails = self.model(h, r, hr_t, direction="tail")  # (h, r) -> hr_t forward
-            pred_heads = self.model(t, r, tr_h, direction="head")  # (t, r) -> tr_h backward
+            pred_tails = self.model(
+                h, r, hr_t, direction="tail"
+            )  # (h, r) -> hr_t forward
+            pred_heads = self.model(
+                t, r, tr_h, direction="head"
+            )  # (t, r) -> tr_h backward
             loss = self.model.loss(pred_heads, pred_tails)
         loss += self.model.get_reg(h, r, t)
 
@@ -183,7 +212,7 @@ class Trainer:
 
         # for key, value in self.config.__dict__.items():
         #     print(key," ",value)
-        #print(self.config.__dict__[""])
+        # print(self.config.__dict__[""])
         # pdb.set_trace()
 
         """Function to train the model."""
@@ -211,10 +240,19 @@ class Trainer:
                             self.best_metric = metrics
                             self.save_model()
                         else:
-                            if self.monitor == Monitor.MEAN_RANK or self.monitor == Monitor.FILTERED_MEAN_RANK:
-                                is_better = self.best_metric[self.monitor.value] > metrics[self.monitor.value]
+                            if (
+                                self.monitor == Monitor.MEAN_RANK
+                                or self.monitor == Monitor.FILTERED_MEAN_RANK
+                            ):
+                                is_better = (
+                                    self.best_metric[self.monitor.value]
+                                    > metrics[self.monitor.value]
+                                )
                             else:
-                                is_better = self.best_metric[self.monitor.value] < metrics[self.monitor.value]
+                                is_better = (
+                                    self.best_metric[self.monitor.value]
+                                    < metrics[self.monitor.value]
+                                )
                             if is_better:
                                 self.save_model()
                                 self.best_metric = metrics
@@ -236,7 +274,7 @@ class Trainer:
 
         self.export_embeddings()
 
-        return cur_epoch_idx # the runned epoches.
+        return cur_epoch_idx  # the runned epoches.
 
     def tune_model(self):
         """Function to tune the model."""
@@ -260,7 +298,11 @@ class Trainer:
         """Function to train the model for one epoch."""
         acc_loss = 0
 
-        num_batch = self.config.tot_train_triples // self.config.batch_size if not self.config.debug else 10
+        num_batch = (
+            self.config.tot_train_triples // self.config.batch_size
+            if not self.config.debug
+            else 10
+        )
 
         self.generator.start_one_epoch(num_batch)
 
@@ -291,22 +333,54 @@ class Trainer:
                 neg_h = torch.LongTensor(data[3]).to(self.config.device)
                 neg_r = torch.LongTensor(data[4]).to(self.config.device)
                 neg_t = torch.LongTensor(data[5]).to(self.config.device)
-                loss = self.train_step_pairwise(pos_h, pos_r, pos_t, neg_h, neg_r, neg_t)
-            elif self.model.training_strategy == TrainingStrategy.HYPERBOLIC_SPACE_BASED:
-                h = torch.cat((torch.LongTensor(data[0]).to(self.config.device), torch.LongTensor(data[3]).to(self.config.device)), dim=-1)
-                r = torch.cat((torch.LongTensor(data[1]).to(self.config.device), torch.LongTensor(data[4]).to(self.config.device)), dim=-1)
-                t = torch.cat((torch.LongTensor(data[2]).to(self.config.device), torch.LongTensor(data[5]).to(self.config.device)), dim=-1)
-                y = torch.cat((torch.ones(np.array(data[0]).shape).to(self.config.device), torch.zeros(np.array(data[3]).shape).to(self.config.device)), dim=-1)
+                loss = self.train_step_pairwise(
+                    pos_h, pos_r, pos_t, neg_h, neg_r, neg_t
+                )
+            elif (
+                self.model.training_strategy == TrainingStrategy.HYPERBOLIC_SPACE_BASED
+            ):
+                h = torch.cat(
+                    (
+                        torch.LongTensor(data[0]).to(self.config.device),
+                        torch.LongTensor(data[3]).to(self.config.device),
+                    ),
+                    dim=-1,
+                )
+                r = torch.cat(
+                    (
+                        torch.LongTensor(data[1]).to(self.config.device),
+                        torch.LongTensor(data[4]).to(self.config.device),
+                    ),
+                    dim=-1,
+                )
+                t = torch.cat(
+                    (
+                        torch.LongTensor(data[2]).to(self.config.device),
+                        torch.LongTensor(data[5]).to(self.config.device),
+                    ),
+                    dim=-1,
+                )
+                y = torch.cat(
+                    (
+                        torch.ones(np.array(data[0]).shape).to(self.config.device),
+                        torch.zeros(np.array(data[3]).shape).to(self.config.device),
+                    ),
+                    dim=-1,
+                )
                 loss = self.train_step_pointwise_hyperbolic(h, r, t, y)
             else:
-                raise NotImplementedError("Unknown training strategy: %s" % self.model.training_strategy)
+                raise NotImplementedError(
+                    "Unknown training strategy: %s" % self.model.training_strategy
+                )
 
             loss.backward()
             self.optimizer.step()
             acc_loss += loss.item()
 
             if not tuning:
-                progress_bar.set_description('acc_loss: %f, cur_loss: %f'% (acc_loss, loss))
+                progress_bar.set_description(
+                    "acc_loss: %f, cur_loss: %f" % (acc_loss, loss)
+                )
 
         self.training_results.append([epoch_idx, acc_loss])
 
@@ -316,18 +390,24 @@ class Trainer:
         self.build_model()
         self.load_model()
 
-        self._logger.info("""The training/loading of the model has finished!
+        self._logger.info(
+            """The training/loading of the model has finished!
                                     Now enter interactive mode :)
                                     -----
-                                    Example 1: trainer.infer_tails(1,10,topk=5)""")
+                                    Example 1: trainer.infer_tails(1,10,topk=5)"""
+        )
         self.infer_tails(1, 10, topk=5)
 
-        self._logger.info("""-----
-                                    Example 2: trainer.infer_heads(10,20,topk=5)""")
+        self._logger.info(
+            """-----
+                                    Example 2: trainer.infer_heads(10,20,topk=5)"""
+        )
         self.infer_heads(10, 20, topk=5)
 
-        self._logger.info("""-----
-                                    Example 3: trainer.infer_rels(1,20,topk=5)""")
+        self._logger.info(
+            """-----
+                                    Example 3: trainer.infer_rels(1,20,topk=5)"""
+        )
         self.infer_rels(1, 20, topk=5)
 
     def exit_interactive_mode(self):
@@ -335,11 +415,13 @@ class Trainer:
 
     def infer_tails(self, h, r, topk=5):
         tails = self.evaluator.test_tail_rank(h, r, topk).detach().cpu().numpy()
-        idx2ent = self.config.knowledge_graph.read_cache_data('idx2entity')
-        idx2rel = self.config.knowledge_graph.read_cache_data('idx2relation')
+        idx2ent = self.config.knowledge_graph.read_cache_data("idx2entity")
+        idx2rel = self.config.knowledge_graph.read_cache_data("idx2relation")
         logs = [
             "",
-            "(head, relation)->({},{}) :: Inferred tails->({})".format(h, r, ",".join([str(i) for i in tails])),
+            "(head, relation)->({},{}) :: Inferred tails->({})".format(
+                h, r, ",".join([str(i) for i in tails])
+            ),
             "",
             "head: %s" % idx2ent[h],
             "relation: %s" % idx2rel[r],
@@ -353,11 +435,13 @@ class Trainer:
 
     def infer_heads(self, r, t, topk=5):
         heads = self.evaluator.test_head_rank(r, t, topk).detach().cpu().numpy()
-        idx2ent = self.config.knowledge_graph.read_cache_data('idx2entity')
-        idx2rel = self.config.knowledge_graph.read_cache_data('idx2relation')
+        idx2ent = self.config.knowledge_graph.read_cache_data("idx2entity")
+        idx2rel = self.config.knowledge_graph.read_cache_data("idx2relation")
         logs = [
             "",
-            "(relation,tail)->({},{}) :: Inferred heads->({})".format(t, r, ",".join([str(i) for i in heads])),
+            "(relation,tail)->({},{}) :: Inferred heads->({})".format(
+                t, r, ",".join([str(i) for i in heads])
+            ),
             "",
             "tail: %s" % idx2ent[t],
             "relation: %s" % idx2rel[r],
@@ -375,11 +459,13 @@ class Trainer:
             return {}
 
         rels = self.evaluator.test_rel_rank(h, t, topk).detach().cpu().numpy()
-        idx2ent = self.config.knowledge_graph.read_cache_data('idx2entity')
-        idx2rel = self.config.knowledge_graph.read_cache_data('idx2relation')
+        idx2ent = self.config.knowledge_graph.read_cache_data("idx2entity")
+        idx2rel = self.config.knowledge_graph.read_cache_data("idx2relation")
         logs = [
             "",
-            "(head,tail)->({},{}) :: Inferred rels->({})".format(h, t, ",".join([str(i) for i in rels])),
+            "(head,tail)->({},{}) :: Inferred rels->({})".format(
+                h, t, ",".join([str(i) for i in rels])
+            ),
             "",
             "head: %s" % idx2ent[h],
             "tail: %s" % idx2ent[t],
@@ -396,7 +482,9 @@ class Trainer:
         """Function to save the model."""
         saved_path = self.config.path_tmp / self.model.model_name
         saved_path.mkdir(parents=True, exist_ok=True)
-        torch.save(self.model.state_dict(), str(saved_path / self.TRAINED_MODEL_FILE_NAME))
+        torch.save(
+            self.model.state_dict(), str(saved_path / self.TRAINED_MODEL_FILE_NAME)
+        )
 
         # Save hyper-parameters into a yaml file with the model
         save_path_config = saved_path / self.TRAINED_MODEL_CONFIG_NAME
@@ -405,9 +493,21 @@ class Trainer:
     def load_model(self, model_path=None):
         """Function to load the model."""
         if model_path is None:
-            model_path = self.config.path_tmp / self.model.model_name / self.TRAINED_MODEL_FILE_NAME
-            model_path_file = self.config.path_tmp / self.model.model_name / self.TRAINED_MODEL_FILE_NAME
-            model_path_config = self.config.path_tmp / self.model.model_name / self.TRAINED_MODEL_CONFIG_NAME
+            model_path = (
+                self.config.path_tmp
+                / self.model.model_name
+                / self.TRAINED_MODEL_FILE_NAME
+            )
+            model_path_file = (
+                self.config.path_tmp
+                / self.model.model_name
+                / self.TRAINED_MODEL_FILE_NAME
+            )
+            model_path_config = (
+                self.config.path_tmp
+                / self.model.model_name
+                / self.TRAINED_MODEL_CONFIG_NAME
+            )
         else:
             model_path = Path(model_path)
             model_path_file = model_path / self.TRAINED_MODEL_FILE_NAME
@@ -417,16 +517,18 @@ class Trainer:
             config_temp = np.load(model_path_config, allow_pickle=True).item()
             # for key, value in config_temp.__dict__.items():
             #     print(key, " ", value)
-            self.config.__dict__['lmbda'] = config_temp.__dict__['lmbda']
-            self.config.__dict__['l1_flag'] = config_temp.__dict__['l1_flag']
-            self.config.__dict__['learning_rate'] = config_temp.__dict__['learning_rate']
-            self.config.__dict__['hidden_size'] = config_temp.__dict__['hidden_size']
-            self.config.__dict__['batch_size'] = config_temp.__dict__['batch_size']
-            self.config.__dict__['epochs'] = config_temp.__dict__['epochs']
-            self.config.__dict__['margin'] = config_temp.__dict__['margin']
-            self.config.__dict__['optimizer'] = config_temp.__dict__['optimizer']
-            self.config.__dict__['sampling'] = config_temp.__dict__['sampling']
-            self.config.__dict__['neg_rate'] = config_temp.__dict__['neg_rate']
+            self.config.__dict__["lmbda"] = config_temp.__dict__["lmbda"]
+            self.config.__dict__["l1_flag"] = config_temp.__dict__["l1_flag"]
+            self.config.__dict__["learning_rate"] = config_temp.__dict__[
+                "learning_rate"
+            ]
+            self.config.__dict__["hidden_size"] = config_temp.__dict__["hidden_size"]
+            self.config.__dict__["batch_size"] = config_temp.__dict__["batch_size"]
+            self.config.__dict__["epochs"] = config_temp.__dict__["epochs"]
+            self.config.__dict__["margin"] = config_temp.__dict__["margin"]
+            self.config.__dict__["optimizer"] = config_temp.__dict__["optimizer"]
+            self.config.__dict__["sampling"] = config_temp.__dict__["sampling"]
+            self.config.__dict__["neg_rate"] = config_temp.__dict__["neg_rate"]
 
             self.model.__init__(**self.config.__dict__)
 
@@ -437,13 +539,19 @@ class Trainer:
 
     def display(self):
         """Function to display embedding."""
-        options = {"ent_only_plot": True,
-                   "rel_only_plot": not self.config.plot_entity_only,
-                   "ent_and_rel_plot": not self.config.plot_entity_only}
+        options = {
+            "ent_only_plot": True,
+            "rel_only_plot": not self.config.plot_entity_only,
+            "ent_and_rel_plot": not self.config.plot_entity_only,
+        }
 
         if self.config.plot_embedding:
             viz = Visualization(self.model, self.config, vis_opts=options)
-            viz.plot_embedding(resultpath=self.config.path_figures, algos=self.model.model_name, show_label=False)
+            viz.plot_embedding(
+                resultpath=self.config.path_figures,
+                algos=self.model.model_name,
+                show_label=False,
+            )
 
         if self.config.plot_training_result:
             viz = Visualization(self.model, self.config)
@@ -455,24 +563,24 @@ class Trainer:
 
     def export_embeddings(self):
         """
-            Export embeddings in tsv and pandas pickled format.
-            With tsvs (both label, vector files), you can:
-            1) Use those pretained embeddings for your applications.
-            2) Visualize the embeddings in this website to gain insights. (https://projector.tensorflow.org/)
+        Export embeddings in tsv and pandas pickled format.
+        With tsvs (both label, vector files), you can:
+        1) Use those pretained embeddings for your applications.
+        2) Visualize the embeddings in this website to gain insights. (https://projector.tensorflow.org/)
 
-            Pandas dataframes can be read with pd.read_pickle('desired_file.pickle')
+        Pandas dataframes can be read with pd.read_pickle('desired_file.pickle')
         """
         save_path = self.config.path_embeddings / self.model.model_name
         save_path.mkdir(parents=True, exist_ok=True)
 
-        idx2ent = self.config.knowledge_graph.read_cache_data('idx2entity')
-        idx2rel = self.config.knowledge_graph.read_cache_data('idx2relation')
+        idx2ent = self.config.knowledge_graph.read_cache_data("idx2entity")
+        idx2rel = self.config.knowledge_graph.read_cache_data("idx2relation")
 
-        with open(str(save_path / "ent_labels.tsv"), 'w') as l_export_file:
+        with open(str(save_path / "ent_labels.tsv"), "w") as l_export_file:
             for label in idx2ent.values():
                 l_export_file.write(label + "\n")
 
-        with open(str(save_path / "rel_labels.tsv"), 'w') as l_export_file:
+        with open(str(save_path / "rel_labels.tsv"), "w") as l_export_file:
             for label in idx2rel.values():
                 l_export_file.write(label + "\n")
 
@@ -483,15 +591,24 @@ class Trainer:
 
             if len(named_embedding.weight.shape) == 2:
                 all_embs = named_embedding.weight.detach().detach().cpu().numpy()
-                with open(str(save_path / ("%s.tsv" % stored_name)), 'w') as v_export_file:
+                with open(
+                    str(save_path / ("%s.tsv" % stored_name)), "w"
+                ) as v_export_file:
                     for idx in all_ids:
-                        v_export_file.write("\t".join([str(x) for x in all_embs[idx]]) + "\n")
+                        v_export_file.write(
+                            "\t".join([str(x) for x in all_embs[idx]]) + "\n"
+                        )
 
     def save_training_result(self):
         """Function that saves training result"""
         files = os.listdir(str(self.config.path_result))
-        l = len([f for f in files if self.model.model_name in f if 'Training' in f])
-        df = pd.DataFrame(self.training_results, columns=['Epochs', 'Loss'])
-        with open(str(self.config.path_result / (self.model.model_name + '_Training_results_' + str(l) + '.csv')),
-                  'w') as fh:
+        l = len([f for f in files if self.model.model_name in f if "Training" in f])
+        df = pd.DataFrame(self.training_results, columns=["Epochs", "Loss"])
+        with open(
+            str(
+                self.config.path_result
+                / (self.model.model_name + "_Training_results_" + str(l) + ".csv")
+            ),
+            "w",
+        ) as fh:
             df.to_csv(fh)
